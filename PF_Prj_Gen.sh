@@ -142,15 +142,15 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     KERN_PATCHLEVEL=`echo ${VER} | awk '{print $2}'`
     KERN_SUBLEVEL=`echo ${VER} | awk '{print $3}'`
 
-    #echo VER=${VER}
-    #echo VERSION=[${KERN_VERSION}], KERN_PATCHLEVEL=[${KERN_PATCHLEVEL}], KERN_SUBLEVEL=[${KERN_SUBLEVEL}]
+    echo VER=${VER}
+    echo VERSION=[${KERN_VERSION}], KERN_PATCHLEVEL=[${KERN_PATCHLEVEL}], KERN_SUBLEVEL=[${KERN_SUBLEVEL}]
     # the source file used to be compiled (.S .s .c)
     KERNEL_VALID_SRC_FILES=
 
     KERNEL_VALID_SRC_FILES=`find "${DIR_TO_BE_COUNT}" ! -path "./tools/*"  ! -path "./examples/*" \
-        ! -path \*/.built-in.o.cmd -name '.*.o.cmd' -print0 |  xargs -0 egrep ":=[[:space:]]+[[:alnum:]]+" \
+        ! -path \*/.built-in.o.cmd  -name '.*.o.cmd' -print0 |  xargs -0 egrep "[[:alnum:]]+\.c+[^:]" \
         | grep -v '\-gcc' | grep -v  '\-ld' | grep -v ' := gcc'  | grep -v ' := g++' \
-        | awk -F':=' '{print $2}' | grep -v 'scripts' | grep -v 'tools'`
+        | awk -F' ' '{print $2}' | grep -v 'scripts' | grep -v 'tools'`
 
     if [ -z "${KERNEL_VALID_SRC_FILES}" ] ; then
         echo "${Echo_Red_Text}Old kernel found! kernel version=[${KERN_VERSION}.${KERN_PATCHLEVEL}.${KERN_SUBLEVEL}]${Echo_Color_Reset}"
@@ -168,6 +168,11 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     File_Not_Exist=
     Index=0
     for files in `echo "${KERNEL_VALID_SRC_FILES}" | sed -e 's/\ /\n/g'`; do
+        mzh=${files:0:1}
+        if [ "$mzh" == "-" ]; then
+            #echo "---ignore $files"
+            continue
+        fi
         DIR_OF_FILES=`dirname "${files}"`
         #echo "${KERNEL_VALID_SRC_FILES}"  dirnames=${DIR_OF_FILES}
         if [ ! -e "${DIR_TO_BE_COUNT}"/"${files}" ]; then
@@ -255,6 +260,7 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
             DIR_OF_FILES=`echo "${files}" | sed -r "s#${PATH_OF_CODE_DIR}##"`
 
             #/kernel-ZZZ/include/XXX.h  -->   /kernel-ZZZ/include/
+			echo "+++${DIR_OF_FILES}"
             DIR_OF_FILES=`dirname "${DIR_OF_FILES}"`
 
             #echo DIR_OF_FILES is "${DIR_OF_FILES}"
