@@ -61,9 +61,10 @@ fi
 
 DIR_TO_BE_COUNT=$1
 cd "${DIR_TO_BE_COUNT}"  >/dev/null
-REALPATH_DIR_TO_BE_COUNT="${PWD}"
+SRC_DIR_TO_BE_COUNT="$DIR_TO_BE_COUNT""/../../../../../../../kernel/msm-4.14/"
+REALPATH_DIR_TO_BE_COUNT=
 cd - >/dev/null
-REALPATH_DIR_TO_BE_COUNT="${REALPATH_DIR_TO_BE_COUNT}""/"
+#REALPATH_DIR_TO_BE_COUNT="${REALPATH_DIR_TO_BE_COUNT}""/"
 RESULT_PRJ=$2
 
 Gen_Tmp="Gen_Tmp"
@@ -150,9 +151,10 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     KERNEL_VALID_SRC_FILES=`find "${DIR_TO_BE_COUNT}/" ! -path "./tools/*"  ! -path "./examples/*" \
         ! -path \*/.built-in.o.cmd -name '.*.o.cmd' -print0 |  xargs -0 egrep ":=[[:space:]]+\/+[[:alnum:]]+" \
         | grep -v '\-gcc' | grep -v  '\-ld' | grep -v ' := gcc'  | grep -v ' := g++' \
-        | awk -F':=' '{print $2}' | grep -v 'scripts' | grep -v 'tools'`
+        | awk -F':=' '{print $2}' | awk -F'msm-4.14/' '{print $2}' | grep -v 'scripts' | grep -v 'tools'`
 
 	echo "$DIR_TO_BE_COUNT"
+	echo "$KERNEL_VALID_SRC_FILES"
     if [ -z "${KERNEL_VALID_SRC_FILES}" ] ; then
         echo "${Echo_Red_Text}Old kernel found! kernel version=[${KERN_VERSION}.${KERN_PATCHLEVEL}.${KERN_SUBLEVEL}]${Echo_Color_Reset}"
         KERNEL_VALID_SRC_FILES=`find "${DIR_TO_BE_COUNT}" ! -path "./tools/*"  ! -path "./examples/*" \
@@ -169,12 +171,22 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     File_Not_Exist=
     Index=0
     for files in `echo "${KERNEL_VALID_SRC_FILES}" | sed -e 's/\ /\n/g'`; do
+
+        mzh=${files:0:1}
+        if [ "$mzh" == "-" ]; then
+            #echo "---ignore $files"
+            continue
+        fi
+
         DIR_OF_FILES=`dirname "${files}"`
-        #echo "${KERNEL_VALID_SRC_FILES}"  dirnames=${DIR_OF_FILES}
-        if [ ! -e "${DIR_TO_BE_COUNT}"/"${files}" ]; then
-            File_Not_Exist+="${DIR_TO_BE_COUNT}"/"${files}" 
+        # echo "${KERNEL_VALID_SRC_FILES}"  dirnames=${DIR_OF_FILES}
+        #if [ ! -e "${DIR_TO_BE_COUNT}"/"${files}" ]; then
+        if [ ! -e "${SRC_DIR_TO_BE_COUNT}""/""${files}" ]; then
+            File_Not_Exist+="${SRC_DIR_TO_BE_COUNT}"/"${files}" 
+            echo ${File_Not_Exist}
+            exit
             File_Not_Exist+=" "
-            #echo "File not found: ${Echo_Red_Text}"${DIR_TO_BE_COUNT}"/"${files}" ${Echo_Color_Reset}"
+            echo "File not found: ${Echo_Red_Text}"${SRC_DIR_TO_BE_COUNT}"/"${files}" ${Echo_Color_Reset}"
             continue
         fi
         echo "${files}" >> "${VALID_SRC}"
@@ -197,10 +209,11 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     Index=0
 
     # Find all the header files, include the host PCs, which is start with /usr
-    find "${DIR_TO_BE_COUNT}" -name .*.o.cmd  -print0 | xargs -0 grep '\.h' | awk '{for(i=2;i<=NF;i++){printf "%s ", $i}; printf "\n"}' \
-        | grep -v ':=' | sed -e 's/\$.*include/include/g' -e 's/\.h.*$/\.h/g' > "${HeadFileList_All}"
-    # Exclude the hostPCs header file. remain the toolchain libc header, linux kernel headerfiles
-    grep -v '^\/usr' "${HeadFileList_All}" > "${HF_NoHost}"
+    find "${DIR_TO_BE_COUNT}/" -name .*.o.cmd  -print0 | xargs -0 grep '\.h' | awk '{for(i=1;i<=NF;i++){printf "%s ", $i}; printf "\n"}' \
+        | grep -v ':=' | sed -e 's/.*include/include/g' -e 's/\.h.*$/\.h/g' -e 's/.*msm-4.14\///g' > "${HeadFileList_All}"
+    
+	# Exclude the hostPCs header file. remain the toolchain libc header, linux kernel headerfiles
+	grep -v '^\/usr' "${HeadFileList_All}" > "${HF_NoHost}"
     awk '!seen[$0]++'  "${HF_NoHost}" > "${HF_NoHost_ND}"
 
     ## Type 1: absolutely path
@@ -220,7 +233,7 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     echo "Header file list in relative path mode"
     for files in `echo "${KERNEL_VALID_HEADER_FILES}" | sed -e 's/\ /\n/g'`; do
         DIR_OF_FILES=`dirname "${files}"`
-        if [ ! -e "${DIR_TO_BE_COUNT}"/"${files}" ]; then
+        if [ ! -e "${SRC_DIR_TO_BE_COUNT}""/""${files}" ]; then
             File_Not_Exist+="${DIR_TO_BE_COUNT}"/"${files}" 
             File_Not_Exist+=" "
             continue
@@ -247,40 +260,7 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
 
     echo
     yes '-' | head -n$(tput cols) | tr -d '\n'
-    echo "Header file list in absolutely path mode"
-    for files in `echo "${KERNEL_VALID_HEADER_FILES}" | sed -e 's/\ /\n/g'`; do
-        ## SubType 1: header files in kernel code
-        if [ -n `echo "${files}" | grep "${PATH_OF_CODE_DIR}"` ]; then
-            # files                                           -->   DIR_OF_FILES
-            #/home/XXX/YYY/kernel-ZZZ/include/XXX.h --> /kernel-ZZZ/include/XXX.h
-            DIR_OF_FILES=`echo "${files}" | sed -r "s#${PATH_OF_CODE_DIR}##"`
-
-            #/kernel-ZZZ/include/XXX.h  -->   /kernel-ZZZ/include/
-            DIR_OF_FILES=`dirname "${DIR_OF_FILES}"`
-
-            #echo DIR_OF_FILES is "${DIR_OF_FILES}"
-            if [ ! -e "${files}" ]; then
-                File_Not_Exist+="${files}" 
-                File_Not_Exist+=" "
-                #echo "File not found: ${Echo_Red_Text}"${DIR_TO_BE_COUNT}"/"${files}" ${Echo_Color_Reset}"
-                continue
-            fi
-            file_rel=`echo "${files}" | sed "s@^${REALPATH_DIR_TO_BE_COUNT}@@"`
-            #echo "${file_rel}"
-            echo "${file_rel}" >> "${Valid_HF}"
-            ((Index++))
-            echo -e -n "\rHeader file[.h] Index:\t"
-            echo -e -n "\t[${Echo_Cyan_Text}${Index}${Echo_Color_Reset}]"
-        ## Subtype 2: header file comes from the toolchain libc, we just skip it
-        else
-            continue
-        fi
-    done
-
-    if [ -n "${File_Not_Exist}" ]; then
-        echo "${Echo_Red_Text}Some files not found, please check:${Echo_Color_Reset}"
-        echo "${File_Not_Exist}" | sed -e 's/\ /\n/g'  >> "${NotFound}"
-    fi
+    echo "Header file list in absolutely path mode ignored"
 
     ## See whether the file is existed
     if [ -f "${NotFound_Verified}" ] ; then
@@ -315,7 +295,7 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
 
     echo
     for files in `cat valid_filelist.txt`; do
-        if [ ! -e "${files}" ] ; then
+        if [ ! -e "${SRC_DIR_TO_BE_COUNT}""/""${files}" ] ; then
             NotFoundFileName=`echo "${files}" | sed 's/^.*\///'`
             sed 's@${files}@@' -i valid_filelist.txt
             SearchMissFile=`find "${REALPATH_DIR_TO_BE_COUNT}" -name "${NotFoundFileName}"`
@@ -331,201 +311,18 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     done
 fi
 
-if [ "${SOURCE_CODE_TYPE}" = "UBOOT" ]; then
-    PATH_OF_CODE_DIR=
-    UBOOT_VALID_HEADER_FILES=
-    UBOOT_SRC_WORK_DIR=uboot_src_work_dir
-    UBOOT_HEADER_WORK_DIR=uboot_valid_header_files
-
-    ## For some dir is symbol link
-    cd "${DIR_TO_BE_COUNT}" && PATH_OF_CODE_DIR=`echo "${PWD}"` && cd - > /dev/null
-
-    # the source file used to be compiled (.S .s .c), exclude the tools and examples directories
-    UBOOT_VALID_SRC_FILES=
-    UBOOT_VALID_SRC_FILES=`cd "${DIR_TO_BE_COUNT}" && find -name .depend ! -path "./tools/*"  ! -path "./examples/*" \
-        | xargs  grep ':' | sed -e 's/.depend.*: //g' | sed -e 's/\ .*$//' && cd - >/dev/null`
-
-    #######################################################################
-    # .S .c .s source file
-    #######################################################################
-    # file not found in dir_to_be_count
-    File_Not_Exist=
-    Index=0
-    for files in `echo "${UBOOT_VALID_SRC_FILES}" | sed -e 's/\ /\n/g'`; do
-        DIR_OF_FILES=`dirname "${files}"`
-        if [ ! -e "${DIR_TO_BE_COUNT}"/"${files}" ]; then
-            File_Not_Exist+="${DIR_TO_BE_COUNT}"/"${files}" 
-            File_Not_Exist+=" "
-            continue
-        fi
-        echo "${files}" >> "${VALID_SRC}"
-        ((Index++))
-        echo -e -n "\rSource file[.c .S .s] Index: "
-        echo -e -n "\t[${Echo_Cyan_Text}${Index}${Echo_Color_Reset}]"
-    done
-    echo
-
-    ## the depend is seperate to 2 line in .depend.XXX, eg:
-    #   a.o: \
-    #   c.c
-    # So we should remove the c.c
-    Src_In_Next_Line=`find "${DIR_TO_BE_COUNT}" -name .depend | xargs egrep ':[[:space:]]+\\$' -A 1 -h | awk 'BEGIN{RS="--"  } {print $1 $3}' | sed 's/o:.*\.//' | sed 's/spl//'`
-
-    for files in `echo "${Src_In_Next_Line}" | sed -e 's/\ /\n/g'`; do
-        if [ ! -e "${files}" ] ; then
-                echo "${files}" >> "${VALID_SRC}"
-        else
-                echo "Not found:${files}"
-        fi
-    done
-
-    ## Handler the spl files, for these files the .c file path in .depend add a spl, lets remove it
-    for files in `echo "${File_Not_Exist}" | sed -e 's/\ /\n/g'`; do
-        if [ ! -e "${files}" ] ; then
-            #echo ccc
-            NotFound_Remove_SPL=`echo "${files}" | sed 's@spl@@'`
-            if [ -e "${NotFound_Remove_SPL}" ] ; then
-                echo "${NotFound_Remove_SPL}" >> "${VALID_SRC}"
-                File_Not_Exist=`echo "${File_Not_Exist}" | sed "s@${files}@@"`
-            fi
-        fi
-    done
-
-    if [ -n "${File_Not_Exist}" ]; then
-        echo
-        echo "${Echo_Red_Text}Check file status${Echo_Color_Reset}"
-        for files in `echo "${File_Not_Exist}" | sed -e 's/\ /\n/g'`; do
-            ## for the line like these: /home/github/BBB/u-boot/./spl/arch/arm/cpu/armv7/\
-            End_With_Slash=`echo "${files: -1}"`
-            if [ -z "${End_With_Slash}" ] ; then
-                echo "${files}"
-                #echo "${File_Not_Exist}" | sed -e 's/\ /\n/g' #| tr -d '\n' #sed 's/^$//'
-            fi
-        done
-    fi
-
-    #######################################################################
-    # .h header file copy
-    #######################################################################
-    # file not found in dir_to_be_count
-    File_Not_Exist=
-    Index=0
-
-    # Find all the header files, include the host PCs, which is start with /usr
-    find "${DIR_TO_BE_COUNT}" -name .depend ! -path "./tools/*"  ! -path "./examples/*" | xargs sed 's/^.*:\ .*\.[c|s|S]//' | tr -d '\\' | sed 's/\ /\n/g'\
-        > "${HeadFileList_All}"
-    # Remove the : line
-    sed -i '/:/d' "${HeadFileList_All}"
-    # Remove blank lines
-    sed  '/^$/d' -i "${HeadFileList_All}"
-    # Exclude the hostPCs header file. remain the toolchain libc header, linux uboot headerfiles
-    grep -v '^\/usr' "${HeadFileList_All}" > "${HF_NoHost}"
-    awk '!seen[$0]++' "${HF_NoHost}" > "${HF_NoHost_ND}"
-
-    ## Type 1: absolutely path
-    # Sort the header files with absolutely path. Contain the toolchain libc header files, linux kenrel header files
-    grep '^\/' "${HF_NoHost}" > "${HF_AbPath}"
-    awk '!seen[$0]++' "${HF_AbPath}" > "${HF_AbsPath_ND}"
-    ## Type 2: no path file
-    # Sort the header files with no path file, only the linux uboot header files
-    grep -v '^\/' "${HF_NoHost}" > "${HF_NoPath}"
-    awk '!seen[$0]++' "${HF_NoPath}" > "${HF_NoPath_ND}"
-
-    ## Handle the Type 2: No path file
-    File_Not_Exist=
-    PATH_OF_NOPATH_FILE=
-    UBOOT_VALID_HEADER_FILES=
-    UBOOT_VALID_HEADER_FILES=`cat "${HF_NoPath_ND}"`
-    for files in `echo "${UBOOT_VALID_HEADER_FILES}" | sed -e 's/\ /\n/g'`; do
-        #echo files is ${files}
-        cd "${DIR_TO_BE_COUNT}" && \
-            PATH_OF_NOPATH_FILE=`find -name .depend.* | xargs grep -w ${files} -nIR | \
-            sed "s@\.depend.*${files}@${files}@" | \
-            tr -d '\\' 2>/dev/null` \
-        && cd - > /dev/null
-
-        #echo PATH_OF_NOPATH_FILE is $PATH_OF_NOPATH_FILE
-        PATH_OF_NOPATH_FILE=`echo ${PATH_OF_NOPATH_FILE} | awk -F' ' '{print $1}'`
-        #echo PATH_OF_NOPATH_FILE is $PATH_OF_NOPATH_FILE
-
-        DIR_OF_FILES=`dirname "${PATH_OF_NOPATH_FILE}"`
-        if [ ! -e ${DIR_TO_BE_COUNT}/${PATH_OF_NOPATH_FILE} ]; then
-            File_Not_Exist+=${DIR_TO_BE_COUNT}/${PATH_OF_NOPATH_FILE} 
-            File_Not_Exist+=" "
-            #echo "${DIR_TO_BE_COUNT}/${PATH_OF_NOPATH_FILE} not found!"
-            continue
-        fi
-        echo "${files}" >> "${Valid_HF}"
-        ((Index++))
-        echo -e -n "\rHeader file[.h] Index: "
-        echo -e -n "[${Echo_Cyan_Text}${Index}${Echo_Color_Reset}]"
-    done
-    #echo -e "${Echo_Green_Text}...Done${Echo_Color_Reset}"
-    #echo -e "\nType 2 item number: ${Index}"
-
-    if [ -n "${File_Not_Exist}" ]; then
-        #echo "${Echo_Red_Text}Some files not found, see file: "${NotFound_TT}"${Echo_Color_Reset}"
-        echo "${File_Not_Exist}" | sed -e 's/\ /\n/g'  >> "${NotFound_TT}"
-    fi
-
-    ## Handle the Type 1: absolutely path
-    File_Not_Exist=
-    DIR_OF_FILES=
-    UBOOT_VALID_HEADER_FILES=
-    UBOOT_VALID_HEADER_FILES=`cat "${HF_AbsPath_ND}"`
-
-    ## For some dir is symbol link
-    cd "${DIR_TO_BE_COUNT}" && PATH_OF_CODE_DIR=`echo "${PWD}"` && cd - > /dev/null
-    #echo PATH_OF_CODE_DIR is "${PATH_OF_CODE_DIR}"
-
-    for files in `echo "${UBOOT_VALID_HEADER_FILES}" | sed -e 's/\ /\n/g'`; do
-        ## SubType 1: header files in uboot code
-        if [ -n `echo "${files}" | grep "${PATH_OF_CODE_DIR}"` ]; then
-            # files                                           -->   DIR_OF_FILES
-            #/home/XXX/YYY/uboot-ZZZ/include/XXX.h --> /uboot-ZZZ/include/XXX.h
-            DIR_OF_FILES=`echo "${files}" | sed -r "s#${PATH_OF_CODE_DIR}##"`
-
-            #/uboot-ZZZ/include/XXX.h  -->   /uboot-ZZZ/include/
-            DIR_OF_FILES=`dirname "${DIR_OF_FILES}"`
-
-            #echo DIR_OF_FILES is "${DIR_OF_FILES}"
-            if [ ! -e "${files}" ]; then
-                File_Not_Exist+="${files}" 
-                File_Not_Exist+=" "
-                #echo "File not found: ${Echo_Red_Text}"${DIR_TO_BE_COUNT}"/"${files}" ${Echo_Color_Reset}"
-                continue
-            fi
-
-            file_rel=`echo "${files}" | sed "s@^${REALPATH_DIR_TO_BE_COUNT}@@"`
-            echo "${file_rel}" >> "${Valid_HF}"
-            ((Index++))
-            echo -e -n "\rType 1 header file[.h], item index: "
-            echo -e -n "[${Echo_Cyan_Text}${Index}${Echo_Color_Reset}]"
-        ## Subtype 2: header file comes from the toolchain libc, we just skip it
-        else
-            continue
-        fi
-    done
-    #echo -e "${Echo_Green_Text}.\tDone${Echo_Color_Reset}"
-
-    if [ -n "${File_Not_Exist}" ]; then
-        echo "${Echo_Red_Text}Some files not found, please check:${Echo_Color_Reset}"
-        echo "${File_Not_Exist}" | sed -e 's/\ /\n/g'  > "${NotFound}"
-    fi
-
-fi
     ############################################################################
     ### Generate the filelist 
     ############################################################################
-    sed "s@^${REALPATH_DIR_TO_BE_COUNT}@@" -i ${Valid_HF}
-    sed "s@^${REALPATH_DIR_TO_BE_COUNT}@@" -i ${VALID_SRC}
+    #sed "s@^${REALPATH_DIR_TO_BE_COUNT}@@" -i ${Valid_HF}
+    #sed "s@^${REALPATH_DIR_TO_BE_COUNT}@@" -i ${VALID_SRC}
     if [ -e "${VALID_SRC}" -a -e "${Valid_HF}" ] ; then
         cat "${VALID_SRC}" "${Valid_HF}" > valid_filelist.txt
     fi
-    sed "s@^@${REALPATH_DIR_TO_BE_COUNT}@" -i valid_filelist.txt
+    # sed "s@^@${REALPATH_DIR_TO_BE_COUNT}@" -i valid_filelist.txt
 
     for files in `cat valid_filelist.txt`; do
-        if [ ! -e "${files}" ] ; then
+        if [ ! -e "${SRC_DIR_TO_BE_COUNT}""/""${files}" ] ; then
             NotFoundFileName=`echo "${files}" | sed 's/^.*\///'`
             sed 's@${files}@@' -i valid_filelist.txt
             SearchMissFile=`find "${REALPATH_DIR_TO_BE_COUNT}" -name "${NotFoundFileName}"`
@@ -533,7 +330,7 @@ fi
                 echo "${SearchMissFile}" >> valid_filelist.txt
             else
                 ## Remove the not found files
-                #echo "Not found file: ${files}"
+                echo "Not found file: ${files}"
                 sed "s@${files}@@" -i valid_filelist.txt
                 sed '/^$/d' -i valid_filelist.txt
             fi
@@ -544,7 +341,7 @@ fi
     sed "s@//@/@" -i valid_filelist.txt
 
     for files in `cat valid_filelist.txt`; do
-        if [ ! -e "${files}" ] ; then
+        if [ ! -e "${SRC_DIR_TO_BE_COUNT}""/""${files}" ] ; then
             sed "s@${files}@@" -i valid_filelist.txt
             sed '/^$/d' -i valid_filelist.txt
         fi
