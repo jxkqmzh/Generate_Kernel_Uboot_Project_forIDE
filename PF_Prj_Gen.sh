@@ -184,7 +184,6 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
         if [ ! -e "${SRC_DIR_TO_BE_COUNT}""/""${files}" ]; then
             File_Not_Exist+="${SRC_DIR_TO_BE_COUNT}"/"${files}" 
             echo ${File_Not_Exist}
-            exit
             File_Not_Exist+=" "
             echo "File not found: ${Echo_Red_Text}"${SRC_DIR_TO_BE_COUNT}"/"${files}" ${Echo_Color_Reset}"
             continue
