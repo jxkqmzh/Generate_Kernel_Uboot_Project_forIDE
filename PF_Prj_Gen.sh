@@ -61,7 +61,7 @@ fi
 
 DIR_TO_BE_COUNT=$1
 cd "${DIR_TO_BE_COUNT}"  >/dev/null
-SRC_DIR_TO_BE_COUNT="$DIR_TO_BE_COUNT""/../../../../../../../kernel/msm-4.14/"
+SRC_DIR_TO_BE_COUNT="$DIR_TO_BE_COUNT""/../../../../../../../kernel/msm-4.19/"
 REALPATH_DIR_TO_BE_COUNT=
 cd - >/dev/null
 #REALPATH_DIR_TO_BE_COUNT="${REALPATH_DIR_TO_BE_COUNT}""/"
@@ -151,7 +151,7 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
     KERNEL_VALID_SRC_FILES=`find "${DIR_TO_BE_COUNT}/" ! -path "./tools/*"  ! -path "./examples/*" \
         ! -path \*/.built-in.o.cmd -name '.*.o.cmd' -print0 |  xargs -0 egrep ":=[[:space:]]+\/+[[:alnum:]]+" \
         | grep -v '\-gcc' | grep -v  '\-ld' | grep -v ' := gcc'  | grep -v ' := g++' \
-        | awk -F':=' '{print $2}' | awk -F'msm-4.14/' '{print $2}' | grep -v 'scripts' | grep -v 'tools'`
+        | awk -F':=' '{print $2}' | awk -F'msm-4.19/' '{print $2}' | grep -v 'scripts' | grep -v 'tools'`
 
 	echo "$DIR_TO_BE_COUNT"
 	echo "$KERNEL_VALID_SRC_FILES"
@@ -209,7 +209,7 @@ if [ "${SOURCE_CODE_TYPE}" == "UBOOT_WITH_DOTCONFIG" -o "${SOURCE_CODE_TYPE}" ==
 
     # Find all the header files, include the host PCs, which is start with /usr
     find "${DIR_TO_BE_COUNT}/" -name .*.o.cmd  -print0 | xargs -0 grep '\.h' | awk '{for(i=1;i<=NF;i++){printf "%s ", $i}; printf "\n"}' \
-        | grep -v ':=' | sed -e 's/.*include/include/g' -e 's/\.h.*$/\.h/g' -e 's/.*msm-4.14\///g' > "${HeadFileList_All}"
+        | grep -v ':=' | sed -e 's/.*include/include/g' -e 's/\.h.*$/\.h/g' -e 's/.*msm-4.19\///g' > "${HeadFileList_All}"
     
 	# Exclude the hostPCs header file. remain the toolchain libc header, linux kernel headerfiles
 	grep -v '^\/usr' "${HeadFileList_All}" > "${HF_NoHost}"
